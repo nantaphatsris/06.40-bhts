@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Practice | Behind The Sound</title>
+  <link rel="stylesheet" href="practice.css">
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <header class="quiz-header">
+    <button class="back-button" id="backButton" type="button" aria-label="Back to Home">‹</button>
+    <div class="header-title">PRACTICE</div>
+    <div class="header-space"></div>
+  </header>
+
+  <main class="practice-container">
+    <div class="practice-top-info">
+      <span>AUDIO PROCESSING CHALLENGE</span>
+      <span id="practiceStatus">READY TO START</span>
+    </div>
+
+    <section class="practice-intro">
+      <h1>Match the Sound</h1>
+      <p>Listen to the target sound, adjust the processors, and make your sound as close as possible.</p>
+    </section>
+
+    <section class="selection-grid">
+      <div class="selection-card">
+        <label for="sampleSelect">01 · TARGET SOUND</label>
+        <select id="sampleSelect">
+          <option value="assets/crape-6-foley-1-trash-koh.mp3">Trash / Foley 01</option>
+          <option value="assets/crape-2-foley-6-table-toob.mp3">Table / Foley 02</option>
+        </select>
+        <small>เสียงเป้าหมายที่ต้องการเลียนแบบ</small>
+      </div>
+
+    </section>
+
+    <section class="audio-panel">
+      <div class="section-heading">
+        <div><span class="eyebrow">REFERENCE</span><h2>Listen to the sounds</h2></div>
+        <span class="tiny-tag">A / B COMPARISON</span>
+      </div>
+      <div class="audio-compare-grid">
+        <article class="audio-card target-card">
+          <div class="audio-card-top"><span class="audio-index">01</span><span class="audio-type">TARGET SOUND</span></div>
+          <h3 id="targetName">Trash / Foley 01</h3>
+          <p>เสียงเป้าหมายที่ต้องการเลียนแบบ</p>
+          <audio id="targetAudio" preload="auto"></audio>
+          <button class="audio-play-button" id="targetPlayButton" type="button"><span>▶</span> Play Target</button>
+        </article>
+        <article class="audio-card processed-card">
+          <div class="audio-card-top"><span class="audio-index">02</span><span class="audio-type">YOUR VERSION</span></div>
+          <h3>Processed Sound</h3>
+          <p>เสียงที่ผ่าน Processor ตามค่าที่คุณปรับ</p>
+          <audio id="processedAudio" preload="auto" src="assets/practice-source.wav"></audio>
+          <button class="audio-play-button" id="processedPlayButton" type="button"><span>▶</span> Play Processed Sound</button>
+        </article>
+      </div>
+      <p class="audio-note" id="audioNote">เลือกเสียงเป้าหมาย แล้วกด Play เพื่อฟังเปรียบเทียบ</p>
+    </section>
+
+    <section class="processor-panel">
+      <div class="section-heading">
+        <div><span class="eyebrow">PROCESSING CHAIN</span><h2>Your Processors</h2></div>
+        <button class="text-button" id="resetButton" type="button">Reset all</button>
+      </div>
+      <div class="empty-processors" id="emptyProcessors">
+        <span class="empty-icon">＋</span>
+        <strong>No processor added yet</strong>
+        <p>กด Add Processor เพื่อเลือกเครื่องมือปรับแต่งเสียง</p>
+      </div>
+      <div class="processor-list" id="processorList"></div>
+      <div class="add-processor-area">
+        <div class="processor-picker" id="processorPicker" hidden></div>
+        <button class="add-processor-button" id="addProcessorButton" type="button">＋ Add Processor</button>
+      </div>
+    </section>
+
+    <section class="submit-section">
+      <div><span class="eyebrow">READY TO CHECK?</span><h2>Finish your sound</h2><p>เมื่อปรับเสียงเสร็จแล้ว กด Submit เพื่อประเมินความใกล้เคียงและรับคำแนะนำ</p></div>
+      <button id="submitButton" class="submit-button" type="button">SUBMIT <span>→</span></button>
+    </section>
+    <p class="save-status" id="saveStatus" role="status"></p>
+  </main>
+
+  <div class="result-overlay" id="resultOverlay" aria-hidden="true">
+    <section class="result-card" role="dialog" aria-modal="true" aria-labelledby="resultTitle">
+      <button class="result-close" id="resultClose" type="button" aria-label="Close">×</button>
+      <p class="result-label">PRACTICE COMPLETED</p>
+      <h2 id="resultTitle">Your Result</h2>
+      <div class="result-score"><strong id="finalScore">0</strong><span>/ 100</span></div>
+      <p class="result-message" id="resultMessage">Your sound has been evaluated.</p>
+      <div class="feedback-block"><h3>Processor Analysis</h3><p id="processorFeedback"></p></div>
+      <div class="feedback-block"><h3>Suggestions</h3><ul id="suggestionList"></ul></div>
+      <div class="result-actions"><button id="tryAgainButton" type="button" class="result-secondary-button">Try Again</button><button id="resultHomeButton" type="button" class="result-home-button">Back to Home →</button></div>
+    </section>
+  </div>
+
+  <script type="module" src="practice.js"></script>
+</body>
+</html>
