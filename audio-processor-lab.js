@@ -112,23 +112,29 @@ function renderFilterLesson() {
       <p>หากต้องการสร้างเสียงพูดที่มีลักษณะเหมือนเสียงจากวิทยุสื่อสาร สามารถใช้ BPF จำกัดช่วงความถี่ให้เหลือเฉพาะย่านกลาง ทำให้เสียงมีลักษณะแคบลงและแตกต่างจากเสียงพูดที่ได้ยินตามปกติ</p>
     </article>
 
-    <section class="filter-lab-section" aria-labelledby="filterLabTitle">
-      <div class="filter-lab-heading">
-        <span class="filter-lab-eyebrow">INTERACTIVE EXPERIMENT</span>
-        <h2 id="filterLabTitle">ลองปรับ Filter ด้วยตัวเอง</h2>
-        <p>เลือกประเภท Filter และปรับค่าต่าง ๆ เพื่อสังเกตการเปลี่ยนแปลงของ Frequency Response Graph</p>
-      </div>
-
+    <section class="filter-lab-section" aria-label="ทดลองปรับ Filter">
       <div class="filter-lab-panel">
-        <div class="filter-lab-topline">
-          <div><span class="filter-live-dot"></span><span>FILTER RESPONSE</span></div>
-          <span class="filter-no-audio">DEMO AUDIO LOADED</span>
-        </div>
-
         <div class="filter-chart-wrap">
           <canvas id="filterResponseChart" aria-label="กราฟ Frequency Response ของ Filter" role="img"></canvas>
         </div>
         <div class="filter-chart-legend"><span><i></i> Frequency Response</span><span>Frequency (Hz) · Log Scale</span></div>
+
+        <div class="filter-audio-player">
+          <div class="filter-audio-title"><strong>AUDIO PLAYER</strong><span>เลือกไฟล์เสียงเพื่อทดลอง Filter</span></div>
+          <label class="filter-file-picker" for="filterAudioFile">เลือกไฟล์เสียง <span>WAV / MP3 / OGG</span></label>
+          <input id="filterAudioFile" class="filter-audio-file" type="file" accept="audio/*">
+          <audio id="filterDemoAudio" preload="metadata"></audio>
+          <div class="filter-player-controls">
+            <button id="filterPlayPause" type="button" aria-label="Play audio" disabled>▶ Play</button>
+            <input id="filterAudioSeek" type="range" min="0" max="1000" value="0" step="1" aria-label="ตำแหน่งเสียง" disabled>
+            <span id="filterAudioTime">0:00 / 0:00</span>
+          </div>
+          <div class="filter-live-graph-title">LIVE WAVEFORM</div>
+          <div class="filter-waveform-wrap"><canvas id="filterWaveform" aria-label="กราฟคลื่นเสียงแบบเรียลไทม์"></canvas></div>
+          <div class="filter-live-graph-title">LIVE FREQUENCY SPECTRUM <span>ช่วยสังเกตย่านความถี่ของเสียง</span></div>
+          <div class="filter-spectrum-wrap"><canvas id="filterSpectrum" aria-label="กราฟความถี่เสียงแบบเรียลไทม์"></canvas></div>
+          <p id="filterAudioStatus" class="filter-audio-status">ยังไม่มีไฟล์เสียงใน ZIP เวอร์ชันนี้ กรุณาเลือกไฟล์เสียงจากเครื่องก่อนกด Play</p>
+        </div>
 
         <div class="filter-controls-grid">
           <div class="filter-control full-width">
@@ -147,16 +153,6 @@ function renderFilterLesson() {
           </div>
         </div>
 
-        <div class="filter-audio-player">
-          <div class="filter-audio-title"><strong>DEMO AUDIO</strong><span>เสียงตัวอย่างที่แนบมา</span></div>
-          <audio id="filterDemoAudio" preload="metadata" src="assets/filter-demo.wav"></audio>
-          <div class="filter-player-controls">
-            <button id="filterPlayPause" type="button" aria-label="Play audio">▶ Play</button>
-            <input id="filterAudioSeek" type="range" min="0" max="1000" value="0" step="1" aria-label="ตำแหน่งเสียง">
-            <span id="filterAudioTime">0:00 / 0:00</span>
-          </div>
-          <p id="filterAudioStatus" class="filter-audio-status">กด Play เพื่อฟังเสียงผ่าน Filter ที่เลือก</p>
-        </div>
         <div class="filter-readout" id="filterReadout" aria-live="polite">LPF · 24 dB/oct</div>
         <p class="filter-tech-note"><strong>หมายเหตุ:</strong> เลื่อนจุดบนกราฟเพื่อเลือกความถี่ได้โดยตรง ส่วน Slope ปรับความชันของการลด/ตัดความถี่ ฟิลเตอร์จริงจะมีช่วงเปลี่ยนผ่านเล็กน้อย ไม่สามารถเป็นมุมฉากสมบูรณ์ได้ แต่ Slope ที่สูงขึ้นจะทำให้ขอบชันขึ้น</p>
       </div>
@@ -180,6 +176,10 @@ function initFilterLab() {
   let audioContext = null;
   let sourceNode = null;
   let filterNodes = [];
+  let waveformAnalyser = null;
+  let waveformFrame = 0;
+  let waveformData = null;
+  let spectrumData = null;
   let draggingMarker = null;
 
   const minFreq = 20, maxFreq = 20000, minDb = -60, maxDb = 12, points = 900;
@@ -198,6 +198,11 @@ function initFilterLab() {
     if (AudioContextClass) audioContext = new AudioContextClass();
     if (audioContext) {
       sourceNode = audioContext.createMediaElementSource(audio);
+      waveformAnalyser = audioContext.createAnalyser();
+      waveformAnalyser.fftSize = 2048;
+      waveformAnalyser.smoothingTimeConstant = 0.72;
+      waveformData = new Uint8Array(waveformAnalyser.fftSize);
+      spectrumData = new Float32Array(waveformAnalyser.frequencyBinCount);
       rebuildAudioChain();
     }
   } catch (err) {
@@ -205,23 +210,15 @@ function initFilterLab() {
     audioStatus.textContent = "เบราว์เซอร์ไม่รองรับ Web Audio API ในหน้านี้";
   }
 
-  // Butterworth Q values keep the cascaded stages better aligned and avoid
-  // the excessive resonant bump caused by repeating Q=0.707 at every stage.
-  function butterworthQs(stageCount) {
-    const order = stageCount * 2;
-    return Array.from({ length: stageCount }, (_, i) => {
-      const k = i + 1;
-      return 1 / (2 * Math.sin(((2 * k) - 1) * Math.PI / (2 * order)));
-    });
-  }
-
+  // Use a non-resonant Q for every cascaded section.
+  // This keeps the response monotonic (no resonance bump) while stage count
+  // continues to control the selected slope in 12 dB/oct steps.
   function makeStages(kind, frequency, count) {
-    const qs = butterworthQs(count);
-    return qs.map((q) => {
+    return Array.from({ length: count }, () => {
       const node = audioContext.createBiquadFilter();
       node.type = kind;
       node.frequency.value = frequency;
-      node.Q.value = q;
+      node.Q.value = 0.5;
       return node;
     });
   }
@@ -245,7 +242,12 @@ function initFilterLab() {
     sourceNode.disconnect();
     let previous = sourceNode;
     filterNodes.forEach((node) => { previous.connect(node); previous = node; });
-    previous.connect(audioContext.destination);
+    if (waveformAnalyser) {
+      previous.connect(waveformAnalyser);
+      waveformAnalyser.connect(audioContext.destination);
+    } else {
+      previous.connect(audioContext.destination);
+    }
   }
 
   function getResponse() {
@@ -338,21 +340,114 @@ function initFilterLab() {
     updateAll();
   }
 
+  const fileInput = document.getElementById("filterAudioFile");
+  const waveformCanvas = document.getElementById("filterWaveform");
+  const waveformCtx = waveformCanvas.getContext("2d");
+  const spectrumCanvas = document.getElementById("filterSpectrum");
+  const spectrumCtx = spectrumCanvas.getContext("2d");
+  let activeObjectUrl = null;
+
+  fileInput.addEventListener("change", () => {
+    const file = fileInput.files && fileInput.files[0];
+    if (!file) return;
+    if (activeObjectUrl) URL.revokeObjectURL(activeObjectUrl);
+    activeObjectUrl = URL.createObjectURL(file);
+    audio.src = activeObjectUrl;
+    audio.load();
+    audioStatus.textContent = `เลือกไฟล์แล้ว: ${file.name}`;
+  });
+
+  function drawWaveform() {
+    const rect = waveformCanvas.getBoundingClientRect();
+    if (!rect.width) return;
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const width = rect.width, height = 112;
+    waveformCanvas.width = Math.round(width * dpr);
+    waveformCanvas.height = Math.round(height * dpr);
+    waveformCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    waveformCtx.clearRect(0, 0, width, height);
+    waveformCtx.fillStyle = "rgba(13,11,9,.55)";
+    waveformCtx.fillRect(0, 0, width, height);
+    waveformCtx.strokeStyle = "rgba(232,160,77,.16)";
+    waveformCtx.beginPath(); waveformCtx.moveTo(0, height/2); waveformCtx.lineTo(width, height/2); waveformCtx.stroke();
+    if (waveformAnalyser && !audio.paused && !audio.ended) {
+      waveformAnalyser.getByteTimeDomainData(waveformData);
+      waveformCtx.beginPath();
+      const slice = width / waveformData.length;
+      for (let i = 0; i < waveformData.length; i++) {
+        const x = i * slice;
+        const y = (waveformData[i] / 255) * height;
+        if (i === 0) waveformCtx.moveTo(x, y); else waveformCtx.lineTo(x, y);
+      }
+      waveformCtx.strokeStyle = "#ffad59";
+      waveformCtx.lineWidth = 1.7;
+      waveformCtx.stroke();
+      drawSpectrum();
+      waveformFrame = requestAnimationFrame(drawWaveform);
+    } else {
+      waveformCtx.strokeStyle = "rgba(255,173,89,.45)";
+      waveformCtx.beginPath(); waveformCtx.moveTo(0,height/2); waveformCtx.lineTo(width,height/2); waveformCtx.stroke();
+      drawSpectrum();
+    }
+  }
+
+  function drawSpectrum() {
+    const rect = spectrumCanvas.getBoundingClientRect();
+    if (!rect.width) return;
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const width = rect.width, height = 125;
+    spectrumCanvas.width = Math.round(width * dpr);
+    spectrumCanvas.height = Math.round(height * dpr);
+    spectrumCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    spectrumCtx.clearRect(0, 0, width, height);
+    spectrumCtx.fillStyle = "rgba(13,11,9,.55)";
+    spectrumCtx.fillRect(0, 0, width, height);
+    const minHz = 20, maxHz = 20000;
+    const xFor = hz => Math.log10(hz / minHz) / Math.log10(maxHz / minHz) * width;
+    spectrumCtx.strokeStyle = "rgba(232,160,77,.14)";
+    spectrumCtx.fillStyle = "#a99886";
+    spectrumCtx.font = "10px Montserrat,sans-serif";
+    [20,100,1000,10000,20000].forEach(hz => {
+      const x = xFor(hz);
+      spectrumCtx.beginPath(); spectrumCtx.moveTo(x,0); spectrumCtx.lineTo(x,height-18); spectrumCtx.stroke();
+      spectrumCtx.textAlign = hz === 20 ? "left" : hz === 20000 ? "right" : "center";
+      spectrumCtx.fillText(hz >= 1000 ? `${hz/1000}k` : `${hz}`, x, height-5);
+    });
+    if (waveformAnalyser && !audio.paused && !audio.ended) {
+      waveformAnalyser.getFloatFrequencyData(spectrumData);
+      const nyquist = audioContext.sampleRate / 2;
+      spectrumCtx.beginPath();
+      let started = false;
+      for (let i = 1; i < spectrumData.length; i++) {
+        const hz = i * audioContext.sampleRate / waveformAnalyser.fftSize;
+        if (hz < minHz || hz > maxHz || hz > nyquist) continue;
+        const db = Math.max(-90, Math.min(0, spectrumData[i]));
+        const x = xFor(hz), y = 4 + (0 - db) / 90 * (height - 25);
+        if (!started) { spectrumCtx.moveTo(x,y); started = true; } else spectrumCtx.lineTo(x,y);
+      }
+      spectrumCtx.strokeStyle = "#ffad59";
+      spectrumCtx.lineWidth = 1.8;
+      spectrumCtx.stroke();
+    }
+  }
+
   playButton.addEventListener("click", async ()=>{
-    if(!audioContext){audioStatus.textContent="ไม่สามารถเริ่ม Web Audio API ได้";return;}
+    if(!audio.src){audioStatus.textContent="กรุณาเลือกไฟล์เสียงก่อนกด Play";return;}
+    if(!audioContext){audioStatus.textContent="เบราว์เซอร์นี้ไม่รองรับ Web Audio API";return;}
     try {
       if(audioContext.state==="suspended") await audioContext.resume();
       if(audio.paused){await audio.play();playButton.textContent="Ⅱ Pause";playButton.setAttribute("aria-label","Pause audio");}
       else {audio.pause();playButton.textContent="▶ Play";playButton.setAttribute("aria-label","Play audio");}
-    } catch(err){audioStatus.textContent="เล่นเสียงไม่ได้ กรุณารีเฟรชหน้าเว็บแล้วลองอีกครั้ง";console.error(err);}
+    } catch(err){audioStatus.textContent="เล่นไฟล์นี้ไม่ได้ กรุณาลองเลือกไฟล์เสียงรูปแบบ WAV หรือ MP3";console.error(err);}
   });
-  audio.addEventListener("play",()=>{playButton.textContent="Ⅱ Pause";audioStatus.textContent="กำลังเล่นเสียงผ่าน Filter ที่เลือก";});
-  audio.addEventListener("pause",()=>{playButton.textContent="▶ Play";});
-  audio.addEventListener("ended",()=>{playButton.textContent="▶ Play";seek.value=0;});
-  audio.addEventListener("loadedmetadata",()=>{timeLabel.textContent=`0:00 / ${fmtTime(audio.duration)}`;});
+  audio.addEventListener("play",()=>{playButton.textContent="Ⅱ Pause";audioStatus.textContent="กำลังเล่นเสียงผ่าน Filter ที่เลือก · กราฟคลื่นกำลังแสดงผลแบบเรียลไทม์";cancelAnimationFrame(waveformFrame);drawWaveform();});
+  audio.addEventListener("pause",()=>{playButton.textContent="▶ Play";cancelAnimationFrame(waveformFrame);drawWaveform();});
+  audio.addEventListener("ended",()=>{playButton.textContent="▶ Play";seek.value=0;cancelAnimationFrame(waveformFrame);drawWaveform();});
+  audio.addEventListener("loadedmetadata",()=>{playButton.disabled=false;seek.disabled=false;timeLabel.textContent=`0:00 / ${fmtTime(audio.duration)}`;audioStatus.textContent="พร้อมเล่นเสียงแล้ว · ปรับ Filter และ Slope ได้ระหว่างเล่น";});
   audio.addEventListener("timeupdate",()=>{if(Number.isFinite(audio.duration)&&audio.duration>0){seek.value=Math.round(audio.currentTime/audio.duration*1000);timeLabel.textContent=`${fmtTime(audio.currentTime)} / ${fmtTime(audio.duration)}`;}});
   seek.addEventListener("input",()=>{if(Number.isFinite(audio.duration)&&audio.duration>0)audio.currentTime=(Number(seek.value)/1000)*audio.duration;});
-  audio.addEventListener("error",()=>{audioStatus.textContent="หาไฟล์เสียงไม่พบ — ตรวจสอบว่าไฟล์อยู่ในโฟลเดอร์ assets และชื่อ filter-demo.wav";});
+  audio.addEventListener("error",()=>{if(audio.src)audioStatus.textContent="อ่านไฟล์เสียงนี้ไม่ได้ กรุณาเลือกไฟล์ WAV, MP3 หรือ OGG อีกครั้ง";});
+  drawWaveform();
   if("ResizeObserver" in window){const observer=new ResizeObserver(drawGraph);observer.observe(canvas.parentElement);}else window.addEventListener("resize",drawGraph);
   updateAll();
 }

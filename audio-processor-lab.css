@@ -1031,3 +1031,23 @@ button, a {
  .gain-player-controls{grid-template-columns:auto minmax(0,1fr);gap:9px}
  .gain-player-controls span{grid-column:2;text-align:right}
 }
+
+
+/* FILTER LAB UPDATE — compact layout, local audio upload and live waveform */
+.filter-lab-section { margin-top: 24px; }
+.filter-lab-panel { padding: 22px; }
+.filter-lab-topline, .filter-lab-heading { display: none !important; }
+.filter-audio-player { margin: 18px 0 22px; }
+.filter-audio-file { position:absolute; width:1px; height:1px; opacity:0; pointer-events:none; }
+.filter-file-picker { display:flex; align-items:center; justify-content:space-between; gap:12px; width:100%; min-height:42px; padding:10px 13px; margin-bottom:13px; color:var(--text); background:#17130f; border:1px solid rgba(232,160,77,.35); border-radius:8px; cursor:pointer; font-size:13px; }
+.filter-file-picker span { color:var(--muted); font-size:11px; }
+.filter-file-picker:hover { border-color:var(--orange); }
+.filter-player-controls button:disabled, .filter-player-controls input:disabled { opacity:.45; cursor:not-allowed; }
+.filter-waveform-wrap { width:100%; height:112px; margin-top:14px; overflow:hidden; background:rgba(13,11,9,.55); border:1px solid rgba(232,160,77,.2); border-radius:9px; }
+#filterWaveform { display:block; width:100%; height:112px; }
+.filter-live-graph-title { margin:13px 0 7px; color:#f0c18e; font:700 10px 'Montserrat',sans-serif; letter-spacing:1px; }
+.filter-live-graph-title span { margin-left:8px; color:var(--muted); font:400 10px 'Kanit',sans-serif; letter-spacing:0; }
+.filter-spectrum-wrap { width:100%; height:125px; overflow:hidden; background:rgba(13,11,9,.55); border:1px solid rgba(232,160,77,.2); border-radius:9px; }
+#filterSpectrum { display:block; width:100%; height:125px; }
+.filter-audio-status { margin-top:10px; color:var(--muted); font-size:11px; line-height:1.7; }
+@media (max-width:600px) { .filter-lab-panel { padding:15px 12px; } .filter-waveform-wrap, #filterWaveform { height:90px; } .filter-spectrum-wrap, #filterSpectrum { height:110px; } }
