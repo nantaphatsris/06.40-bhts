@@ -114,6 +114,11 @@ function renderFilterLesson() {
 
     <section class="filter-lab-section" aria-label="ทดลองปรับ Filter">
       <div class="filter-lab-panel">
+        <div class="filter-chart-wrap">
+          <canvas id="filterResponseChart" aria-label="กราฟ Frequency Response ของ Filter" role="img"></canvas>
+        </div>
+        <div class="filter-chart-legend"><span><i></i> Frequency Response</span><span>Frequency (Hz) · Log Scale</span></div>
+
         <div class="filter-audio-player">
           <div class="filter-audio-title"><strong>AUDIO PLAYER</strong><span>เลือกไฟล์เสียงเพื่อทดลอง Filter</span></div>
           <label class="filter-file-picker" for="filterAudioFile">เลือกไฟล์เสียง <span>WAV / MP3 / OGG</span></label>
@@ -124,16 +129,15 @@ function renderFilterLesson() {
             <input id="filterAudioSeek" type="range" min="0" max="1000" value="0" step="1" aria-label="ตำแหน่งเสียง" disabled>
             <span id="filterAudioTime">0:00 / 0:00</span>
           </div>
-          <p id="filterAudioStatus" class="filter-audio-status">เลือกไฟล์เสียงจากเครื่องเพื่อทดลอง Filter</p>
+          <div class="filter-live-graph-title">LIVE WAVEFORM</div>
+          <div class="filter-waveform-wrap"><canvas id="filterWaveform" aria-label="กราฟคลื่นเสียงแบบเรียลไทม์"></canvas></div>
+          <div class="filter-live-graph-title">LIVE FREQUENCY SPECTRUM <span>ช่วยสังเกตย่านความถี่ของเสียง</span></div>
+          <div class="filter-spectrum-wrap"><canvas id="filterSpectrum" aria-label="กราฟความถี่เสียงแบบเรียลไทม์"></canvas></div>
+          <p id="filterAudioStatus" class="filter-audio-status">ยังไม่มีไฟล์เสียงใน ZIP เวอร์ชันนี้ กรุณาเลือกไฟล์เสียงจากเครื่องก่อนกด Play</p>
         </div>
-
-        <div class="filter-chart-wrap">
-          <canvas id="filterResponseChart" aria-label="กราฟ Filter Response พร้อม Live Frequency Spectrum" role="img"></canvas>
-        </div>
-        <div class="filter-chart-legend"><span><i></i> Filter Response</span><span><i class="filter-spectrum-legend"></i> Live Spectrum · Frequency (Hz)</span></div>
 
         <div class="filter-controls-grid">
-          <div class="filter-control">
+          <div class="filter-control full-width">
             <label for="filterType">Filter Type</label>
             <select id="filterType">
               <option value="lowpass">Low-Pass Filter (LPF)</option>
@@ -142,7 +146,7 @@ function renderFilterLesson() {
             </select>
           </div>
 
-          <div class="filter-control">
+          <div class="filter-control full-width">
             <div class="filter-label-line"><label for="filterSlope">Slope</label><output id="filterSlopeValue">24 dB/oct</output></div>
             <input id="filterSlope" type="range" min="12" max="96" step="12" value="24">
             <div class="filter-range-labels"><span>12 dB/oct · ชันน้อย</span><span>96 dB/oct · ชันมาก</span></div>
@@ -150,6 +154,7 @@ function renderFilterLesson() {
         </div>
 
         <div class="filter-readout" id="filterReadout" aria-live="polite">LPF · 24 dB/oct</div>
+        <p class="filter-tech-note"><strong>หมายเหตุ:</strong> เลื่อนจุดบนกราฟเพื่อเลือกความถี่ได้โดยตรง ส่วน Slope ปรับความชันของการลด/ตัดความถี่ ฟิลเตอร์จริงจะมีช่วงเปลี่ยนผ่านเล็กน้อย ไม่สามารถเป็นมุมฉากสมบูรณ์ได้ แต่ Slope ที่สูงขึ้นจะทำให้ขอบชันขึ้น</p>
       </div>
     </section>
   `;
@@ -172,9 +177,9 @@ function initFilterLab() {
   let sourceNode = null;
   let filterNodes = [];
   let waveformAnalyser = null;
+  let waveformFrame = 0;
   let waveformData = null;
   let spectrumData = null;
-  let spectrumAnimationFrame = 0;
   let draggingMarker = null;
 
   const minFreq = 20, maxFreq = 20000, minDb = -60, maxDb = 12, points = 900;
@@ -275,74 +280,35 @@ function initFilterLab() {
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const pad = { left: 55, right: 18, top: 18, bottom: 45 };
     const plotW = width - pad.left - pad.right, plotH = height - pad.top - pad.bottom;
-    const xFor = f => pad.left + Math.log10(f / minFreq) / Math.log10(maxFreq / minFreq) * plotW;
-    const yFor = db => pad.top + ((maxDb - clamp(db, minDb, maxDb)) / (maxDb - minDb)) * plotH;
+    const xFor = (f) => pad.left + Math.log10(f / minFreq) / Math.log10(maxFreq / minFreq) * plotW;
+    const freqForX = (x) => minFreq * Math.pow(maxFreq / minFreq, clamp((x - pad.left) / plotW, 0, 1));
+    const yFor = (db) => pad.top + ((maxDb - clamp(db, minDb, maxDb)) / (maxDb - minDb)) * plotH;
     ctx.clearRect(0, 0, width, height);
-    ctx.fillStyle = 'rgba(13,11,9,.72)'; ctx.fillRect(0, 0, width, height);
-
-    // Grid and dB labels
-    ctx.font = '11px Montserrat, sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = "rgba(13,11,9,.55)"; ctx.fillRect(0, 0, width, height);
+    ctx.font = "11px Montserrat, sans-serif"; ctx.textAlign = "right"; ctx.textBaseline = "middle";
     for (let db = -60; db <= 0; db += 12) {
-      const y = yFor(db); ctx.strokeStyle = db === 0 ? 'rgba(232,160,77,.4)' : 'rgba(232,160,77,.12)';
+      const y = yFor(db); ctx.strokeStyle = db === 0 ? "rgba(232,160,77,.45)" : "rgba(232,160,77,.13)";
       ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(width - pad.right, y); ctx.stroke();
-      ctx.fillStyle = '#bca995'; ctx.fillText(`${db} dB`, pad.left - 9, y);
+      ctx.fillStyle = "#bca995"; ctx.fillText(`${db} dB`, pad.left - 9, y);
     }
     const ticks = [20,50,100,200,500,1000,2000,5000,10000,20000];
-    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-    ticks.forEach(f => { const x=xFor(f); ctx.strokeStyle='rgba(232,160,77,.12)'; ctx.beginPath(); ctx.moveTo(x,pad.top); ctx.lineTo(x,pad.top+plotH); ctx.stroke(); ctx.fillStyle='#bca995'; ctx.fillText(f>=1000?`${f/1000}k`:`${f}`,x,pad.top+plotH+10); });
-
-    // Live spectrum is drawn inside the same frequency plot, behind the filter curve.
-    if (waveformAnalyser && spectrumData && !audio.paused && !audio.ended) {
-      waveformAnalyser.getFloatFrequencyData(spectrumData);
-      const nyquist = audioContext.sampleRate / 2;
-      const bins = [];
-      for (let i=1;i<spectrumData.length;i++) {
-        const hz = i * audioContext.sampleRate / waveformAnalyser.fftSize;
-        if (hz < minFreq || hz > maxFreq || hz > nyquist) continue;
-        const db = clamp(spectrumData[i], -90, 0);
-        bins.push({x:xFor(hz), level:db});
-      }
-      const baseY = yFor(-60);
-      bins.forEach((bin, i) => {
-        const nextX = bins[i+1] ? bins[i+1].x : bin.x + 2;
-        const barW = Math.max(1, nextX - bin.x + 1);
-        const topY = yFor(clamp(bin.level, -60, 0));
-        const grad = ctx.createLinearGradient(0, topY, 0, baseY);
-        grad.addColorStop(0, 'rgba(255,105,75,.88)');
-        grad.addColorStop(.48, 'rgba(255,174,76,.72)');
-        grad.addColorStop(1, 'rgba(90,185,170,.22)');
-        ctx.fillStyle = grad;
-        ctx.fillRect(bin.x, topY, barW, Math.max(1, baseY-topY));
-      });
-    }
-
-    // Draw an idealized monotonic slope in log-frequency space (no resonance bump).
-    const type = typeSelect.value;
-    const slope = Number(slopeInput.value);
-    function responseAt(freq) {
-      const lp = -slope * Math.max(0, Math.log2(freq / lowerFreq));
-      const hp = -slope * Math.max(0, Math.log2(lowerFreq / freq));
-      if (type === 'lowpass') return Math.max(minDb, lp);
-      if (type === 'highpass') return Math.max(minDb, hp);
-      const lowSide = -slope * Math.max(0, Math.log2(lowerFreq / freq));
-      const highSide = -slope * Math.max(0, Math.log2(freq / upperFreq));
-      return Math.max(minDb, Math.min(0, lowSide + highSide));
-    }
+    ctx.textAlign = "center"; ctx.textBaseline = "top";
+    ticks.forEach((f) => { const x=xFor(f); ctx.strokeStyle="rgba(232,160,77,.13)"; ctx.beginPath(); ctx.moveTo(x,pad.top); ctx.lineTo(x,pad.top+plotH); ctx.stroke(); ctx.fillStyle="#bca995"; ctx.fillText(f>=1000?`${f/1000}k`:`${f}`,x,pad.top+plotH+10); });
+    const { freqs, db } = getResponse();
     ctx.beginPath();
-    for (let i=0;i<points;i++) {
-      const f = minFreq * Math.pow(maxFreq/minFreq, i/(points-1));
-      const x=xFor(f), y=yFor(responseAt(f));
-      if (!i) ctx.moveTo(x,y); else ctx.lineTo(x,y);
-    }
-    ctx.strokeStyle='#ffad59'; ctx.lineWidth=2.8; ctx.shadowColor='rgba(255,157,67,.45)'; ctx.shadowBlur=7; ctx.stroke(); ctx.shadowBlur=0;
-
-    const markers = type === 'bandpass' ? [{f:lowerFreq},{f:upperFreq}] : [{f:lowerFreq}];
-    markers.forEach(({f})=>{const x=xFor(f);ctx.setLineDash([4,5]);ctx.strokeStyle='rgba(255,190,125,.7)';ctx.beginPath();ctx.moveTo(x,pad.top);ctx.lineTo(x,pad.top+plotH);ctx.stroke();ctx.setLineDash([]);ctx.beginPath();ctx.arc(x,yFor(-3),6,0,Math.PI*2);ctx.fillStyle='#ffad59';ctx.fill();ctx.lineWidth=2;ctx.strokeStyle='#24180e';ctx.stroke();});
-    ctx.fillStyle='#c6b7a9';ctx.font='11px Kanit,sans-serif';ctx.textAlign='center';ctx.fillText('Frequency (Hz) · ลากจุดเพื่อปรับความถี่',pad.left+plotW/2,height-7);
-    document.getElementById('filterSlopeValue').textContent=`${slopeInput.value} dB/oct`;
-    document.getElementById('filterReadout').textContent = type === 'bandpass'
+    for (let i=0;i<points;i++){ const x=xFor(freqs[i]), y=yFor(db[i]); if(!i)ctx.moveTo(x,y);else ctx.lineTo(x,y); }
+    ctx.lineTo(xFor(maxFreq),yFor(minDb)); ctx.lineTo(xFor(minFreq),yFor(minDb)); ctx.closePath();
+    const grad=ctx.createLinearGradient(0,pad.top,0,pad.top+plotH); grad.addColorStop(0,"rgba(255,157,67,.18)"); grad.addColorStop(1,"rgba(255,157,67,.01)"); ctx.fillStyle=grad; ctx.fill();
+    ctx.beginPath();
+    for(let i=0;i<points;i++){const x=xFor(freqs[i]),y=yFor(db[i]);if(!i)ctx.moveTo(x,y);else ctx.lineTo(x,y);}
+    ctx.strokeStyle="#ffad59";ctx.lineWidth=2.5;ctx.shadowColor="rgba(255,157,67,.45)";ctx.shadowBlur=7;ctx.stroke();ctx.shadowBlur=0;
+    const markers = typeSelect.value === "bandpass" ? [{f:lowerFreq,id:"lower"},{f:upperFreq,id:"upper"}] : [{f:lowerFreq,id:"lower"}];
+    markers.forEach(({f})=>{const x=xFor(f);ctx.setLineDash([4,5]);ctx.strokeStyle="rgba(255,190,125,.65)";ctx.beginPath();ctx.moveTo(x,pad.top);ctx.lineTo(x,pad.top+plotH);ctx.stroke();ctx.setLineDash([]);ctx.beginPath();ctx.arc(x,yFor(-3),7,0,Math.PI*2);ctx.fillStyle="#ffad59";ctx.fill();ctx.lineWidth=2;ctx.strokeStyle="#24180e";ctx.stroke();});
+    ctx.fillStyle="#c6b7a9";ctx.font="11px Kanit,sans-serif";ctx.textAlign="center";ctx.fillText("Frequency (Hz) · ลากจุดเพื่อปรับความถี่",pad.left+plotW/2,height-7);
+    document.getElementById("filterSlopeValue").textContent=`${slopeInput.value} dB/oct`;
+    document.getElementById("filterReadout").textContent = typeSelect.value === "bandpass"
       ? `BPF · ${fmtHz(lowerFreq)} – ${fmtHz(upperFreq)} · Slope ${slopeInput.value} dB/oct (ทั้งสองด้าน)`
-      : `${type === 'lowpass' ? 'LPF' : 'HPF'} · ${fmtHz(lowerFreq)} · Slope ${slopeInput.value} dB/oct`;
+      : `${typeSelect.value === "lowpass" ? "LPF" : "HPF"} · ${fmtHz(lowerFreq)} · Slope ${slopeInput.value} dB/oct`;
   }
 
   function updateAll() { rebuildAudioChain(); drawGraph(); }
@@ -374,9 +340,14 @@ function initFilterLab() {
     updateAll();
   }
 
-  const fileInput = document.getElementById('filterAudioFile');
+  const fileInput = document.getElementById("filterAudioFile");
+  const waveformCanvas = document.getElementById("filterWaveform");
+  const waveformCtx = waveformCanvas.getContext("2d");
+  const spectrumCanvas = document.getElementById("filterSpectrum");
+  const spectrumCtx = spectrumCanvas.getContext("2d");
   let activeObjectUrl = null;
-  fileInput.addEventListener('change', () => {
+
+  fileInput.addEventListener("change", () => {
     const file = fileInput.files && fileInput.files[0];
     if (!file) return;
     if (activeObjectUrl) URL.revokeObjectURL(activeObjectUrl);
@@ -385,6 +356,80 @@ function initFilterLab() {
     audio.load();
     audioStatus.textContent = `เลือกไฟล์แล้ว: ${file.name}`;
   });
+
+  function drawWaveform() {
+    const rect = waveformCanvas.getBoundingClientRect();
+    if (!rect.width) return;
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const width = rect.width, height = 112;
+    waveformCanvas.width = Math.round(width * dpr);
+    waveformCanvas.height = Math.round(height * dpr);
+    waveformCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    waveformCtx.clearRect(0, 0, width, height);
+    waveformCtx.fillStyle = "rgba(13,11,9,.55)";
+    waveformCtx.fillRect(0, 0, width, height);
+    waveformCtx.strokeStyle = "rgba(232,160,77,.16)";
+    waveformCtx.beginPath(); waveformCtx.moveTo(0, height/2); waveformCtx.lineTo(width, height/2); waveformCtx.stroke();
+    if (waveformAnalyser && !audio.paused && !audio.ended) {
+      waveformAnalyser.getByteTimeDomainData(waveformData);
+      waveformCtx.beginPath();
+      const slice = width / waveformData.length;
+      for (let i = 0; i < waveformData.length; i++) {
+        const x = i * slice;
+        const y = (waveformData[i] / 255) * height;
+        if (i === 0) waveformCtx.moveTo(x, y); else waveformCtx.lineTo(x, y);
+      }
+      waveformCtx.strokeStyle = "#ffad59";
+      waveformCtx.lineWidth = 1.7;
+      waveformCtx.stroke();
+      drawSpectrum();
+      waveformFrame = requestAnimationFrame(drawWaveform);
+    } else {
+      waveformCtx.strokeStyle = "rgba(255,173,89,.45)";
+      waveformCtx.beginPath(); waveformCtx.moveTo(0,height/2); waveformCtx.lineTo(width,height/2); waveformCtx.stroke();
+      drawSpectrum();
+    }
+  }
+
+  function drawSpectrum() {
+    const rect = spectrumCanvas.getBoundingClientRect();
+    if (!rect.width) return;
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const width = rect.width, height = 125;
+    spectrumCanvas.width = Math.round(width * dpr);
+    spectrumCanvas.height = Math.round(height * dpr);
+    spectrumCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    spectrumCtx.clearRect(0, 0, width, height);
+    spectrumCtx.fillStyle = "rgba(13,11,9,.55)";
+    spectrumCtx.fillRect(0, 0, width, height);
+    const minHz = 20, maxHz = 20000;
+    const xFor = hz => Math.log10(hz / minHz) / Math.log10(maxHz / minHz) * width;
+    spectrumCtx.strokeStyle = "rgba(232,160,77,.14)";
+    spectrumCtx.fillStyle = "#a99886";
+    spectrumCtx.font = "10px Montserrat,sans-serif";
+    [20,100,1000,10000,20000].forEach(hz => {
+      const x = xFor(hz);
+      spectrumCtx.beginPath(); spectrumCtx.moveTo(x,0); spectrumCtx.lineTo(x,height-18); spectrumCtx.stroke();
+      spectrumCtx.textAlign = hz === 20 ? "left" : hz === 20000 ? "right" : "center";
+      spectrumCtx.fillText(hz >= 1000 ? `${hz/1000}k` : `${hz}`, x, height-5);
+    });
+    if (waveformAnalyser && !audio.paused && !audio.ended) {
+      waveformAnalyser.getFloatFrequencyData(spectrumData);
+      const nyquist = audioContext.sampleRate / 2;
+      spectrumCtx.beginPath();
+      let started = false;
+      for (let i = 1; i < spectrumData.length; i++) {
+        const hz = i * audioContext.sampleRate / waveformAnalyser.fftSize;
+        if (hz < minHz || hz > maxHz || hz > nyquist) continue;
+        const db = Math.max(-90, Math.min(0, spectrumData[i]));
+        const x = xFor(hz), y = 4 + (0 - db) / 90 * (height - 25);
+        if (!started) { spectrumCtx.moveTo(x,y); started = true; } else spectrumCtx.lineTo(x,y);
+      }
+      spectrumCtx.strokeStyle = "#ffad59";
+      spectrumCtx.lineWidth = 1.8;
+      spectrumCtx.stroke();
+    }
+  }
 
   playButton.addEventListener("click", async ()=>{
     if(!audio.src){audioStatus.textContent="กรุณาเลือกไฟล์เสียงก่อนกด Play";return;}
@@ -395,23 +440,14 @@ function initFilterLab() {
       else {audio.pause();playButton.textContent="▶ Play";playButton.setAttribute("aria-label","Play audio");}
     } catch(err){audioStatus.textContent="เล่นไฟล์นี้ไม่ได้ กรุณาลองเลือกไฟล์เสียงรูปแบบ WAV หรือ MP3";console.error(err);}
   });
-  function animateSpectrum() {
-    drawGraph();
-    if (!audio.paused && !audio.ended) spectrumAnimationFrame = requestAnimationFrame(animateSpectrum);
-  }
-  audio.addEventListener("play",()=>{
-    playButton.textContent="Ⅱ Pause";
-    audioStatus.textContent="กำลังเล่นเสียงผ่าน Filter · Live Spectrum แสดงความถี่หลังผ่าน Filter";
-    cancelAnimationFrame(spectrumAnimationFrame);
-    animateSpectrum();
-  });
-  audio.addEventListener("pause",()=>{playButton.textContent="▶ Play";cancelAnimationFrame(spectrumAnimationFrame);drawGraph();});
-  audio.addEventListener("ended",()=>{playButton.textContent="▶ Play";seek.value=0;cancelAnimationFrame(spectrumAnimationFrame);drawGraph();});
+  audio.addEventListener("play",()=>{playButton.textContent="Ⅱ Pause";audioStatus.textContent="กำลังเล่นเสียงผ่าน Filter ที่เลือก · กราฟคลื่นกำลังแสดงผลแบบเรียลไทม์";cancelAnimationFrame(waveformFrame);drawWaveform();});
+  audio.addEventListener("pause",()=>{playButton.textContent="▶ Play";cancelAnimationFrame(waveformFrame);drawWaveform();});
+  audio.addEventListener("ended",()=>{playButton.textContent="▶ Play";seek.value=0;cancelAnimationFrame(waveformFrame);drawWaveform();});
   audio.addEventListener("loadedmetadata",()=>{playButton.disabled=false;seek.disabled=false;timeLabel.textContent=`0:00 / ${fmtTime(audio.duration)}`;audioStatus.textContent="พร้อมเล่นเสียงแล้ว · ปรับ Filter และ Slope ได้ระหว่างเล่น";});
   audio.addEventListener("timeupdate",()=>{if(Number.isFinite(audio.duration)&&audio.duration>0){seek.value=Math.round(audio.currentTime/audio.duration*1000);timeLabel.textContent=`${fmtTime(audio.currentTime)} / ${fmtTime(audio.duration)}`;}});
   seek.addEventListener("input",()=>{if(Number.isFinite(audio.duration)&&audio.duration>0)audio.currentTime=(Number(seek.value)/1000)*audio.duration;});
   audio.addEventListener("error",()=>{if(audio.src)audioStatus.textContent="อ่านไฟล์เสียงนี้ไม่ได้ กรุณาเลือกไฟล์ WAV, MP3 หรือ OGG อีกครั้ง";});
-  drawGraph();
+  drawWaveform();
   if("ResizeObserver" in window){const observer=new ResizeObserver(drawGraph);observer.observe(canvas.parentElement);}else window.addEventListener("resize",drawGraph);
   updateAll();
 }
