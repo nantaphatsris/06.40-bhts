@@ -1051,3 +1051,33 @@ button, a {
 #filterSpectrum { display:block; width:100%; height:125px; }
 .filter-audio-status { margin-top:10px; color:var(--muted); font-size:11px; line-height:1.7; }
 @media (max-width:600px) { .filter-lab-panel { padding:15px 12px; } .filter-waveform-wrap, #filterWaveform { height:90px; } .filter-spectrum-wrap, #filterSpectrum { height:110px; } }
+
+/* FILTER LAB REVISION — integrated live spectrum + compact controls */
+.filter-lab-panel { display:flex; flex-direction:column; gap:12px; }
+.filter-audio-player { order:0; margin:0 0 2px; padding:13px 15px; }
+.filter-chart-wrap { order:1; height:360px; }
+#filterResponseChart { height:360px; }
+.filter-chart-legend { order:2; margin:0 2px 4px; }
+.filter-controls-grid { order:3; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+.filter-control { padding:11px 13px; }
+.filter-control.full-width { grid-column:auto; }
+.filter-control label { margin-bottom:6px; }
+.filter-control select { min-height:38px; padding:7px 10px; }
+.filter-range-labels { font-size:9px; }
+.filter-readout { order:4; margin-top:0; padding:9px 12px; }
+.filter-audio-title { margin-bottom:9px; }
+.filter-player-controls { gap:10px; }
+.filter-file-picker { min-height:36px; margin-bottom:9px; padding:8px 11px; }
+.filter-audio-status { margin-top:7px; }
+.filter-spectrum-legend { display:inline-block; width:17px; height:3px; margin-left:6px; border-radius:3px; background:linear-gradient(90deg,#5ab9aa,#ffad59,#ff694b); }
+@media(max-width:600px) {
+  .filter-lab-panel { gap:10px; }
+  .filter-chart-wrap, #filterResponseChart { height:310px; }
+  .filter-controls-grid { grid-template-columns:1fr 1fr; gap:8px; }
+  .filter-control { padding:9px; }
+  .filter-control label { font-size:11px; }
+  .filter-range-labels span { max-width:48%; }
+  .filter-player-controls { grid-template-columns:auto minmax(50px,1fr) auto; }
+  .filter-player-controls button { grid-column:auto; min-width:76px; padding:9px 10px; }
+  .filter-player-controls span { font-size:9px; }
+}
